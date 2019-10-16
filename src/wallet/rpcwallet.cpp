@@ -4087,6 +4087,47 @@ UniValue getMyPaymentCode(const UniValue& params, bool fHelp)
     return pbip47WalletMain->getPaymentCode();
 }
 
+UniValue getMyNotificationAddress(const UniValue& params, bool fHelp)
+{
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() >= 1)
+        throw runtime_error(
+                "getMyNotificationAddress\n" 
+                "return notificatioinAddress"
+        );
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    EnsureWalletIsUnlocked();
+
+    
+    return pbip47WalletMain->getNotifiactionAddress();
+}
+
+UniValue getNotificationAddressFromPaymentCode(const UniValue& params, bool fHelp)
+{
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+                "getNotificationAddressFromPaymentCode <Payment Code>\n" 
+                "return notificatioinAddress of Payment Code"
+        );
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    EnsureWalletIsUnlocked();
+
+    Bip47Account bip47Account(params[0].get_str());
+
+    return bip47Account.getNotificationAddress().ToString();
+}
+
+
+
 UniValue sendtopcode(const UniValue& params, bool fHelp)
 {
     if (!EnsureWalletIsAvailable(fHelp))
@@ -4118,7 +4159,9 @@ UniValue sendtopcode(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_TYPE_ERROR, "Invalid amount for send");
 
 
-    pbip47WalletMain->makeNotificationTransaction(paymentCode.toString());
+    EnsureWalletIsUnlocked();
+    return pbip47WalletMain->makeNotificationTransaction(paymentCode.toString());
+    
     // Wallet comments
     // CWalletTx wtx;
     // if (params.size() > 2 && !params[2].isNull() && !params[2].get_str().empty())
@@ -4135,7 +4178,6 @@ UniValue sendtopcode(const UniValue& params, bool fHelp)
     // SendMoney(address.Get(), nAmount, fSubtractFeeFromAmount, wtx);
 
     // return wtx.GetHash().GetHex();
-    return "Success";
 }
 
 UniValue listreceivedbypcode(const UniValue& params, bool fHelp)
@@ -4320,7 +4362,9 @@ static const CRPCCommand commands[] =
 
     // new RPC functions for payment code
     { "wallet",             "getnewpcode",            &getnewpcode,            true  },
-    { "wallet",             "getMyPaymentCode",    &getMyPaymentCode,    true  },
+    { "wallet",             "getMyPaymentCode",       &getMyPaymentCode,       true  },
+    { "wallet",             "getMyNotificationAddress",       &getMyNotificationAddress,       true  },
+    { "wallet",             "getNotificationAddressFromPaymentCode",       &getNotificationAddressFromPaymentCode,       true  },
     { "wallet",             "sendtopcode",            &sendtopcode,            false },
     { "wallet",             "listreceivedbypcode",    &listreceivedbypcode,    false },
     { "wallet",             "getreceivedbypcode",     &getreceivedbypcode,     false },

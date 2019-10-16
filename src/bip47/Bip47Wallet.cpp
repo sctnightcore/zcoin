@@ -3,6 +3,7 @@
 #include "SecretPoint.h"
 #include "Bip47Util.h"
 #include "script/ismine.h"
+#include "uint256.h"
 
 /**
  * The default bip47 wallet file name and instance.
@@ -21,7 +22,12 @@ Bip47Wallet::Bip47Wallet(string strWalletFileIn, string p_coinName, CExtKey mast
 
     deriveAccount(masterExtKey);
     CBitcoinAddress notificationAddress = mBip47Accounts[0].getNotificationAddress();
-    LogPrintf("Bip47Wallet notification Address: %s", notificationAddress.ToString());
+    CScript notificationScript = GetScriptForDestination(notificationAddress.Get());
+    if (!pwalletMain->HaveWatchOnly(notificationScript))
+    {
+        pwalletMain->AddWatchOnly(notificationScript);
+    }
+    LogPrintf("Bip47Wallet notification Address: %s\n", notificationAddress.ToString());
     
 }
 
@@ -272,9 +278,10 @@ CAmount Bip47Wallet::getValueSentToMe(CTransaction tx)
     return 0;
 }
 
-void Bip47Wallet::makeNotificationTransaction(String paymentCode) 
+std::string Bip47Wallet::makeNotificationTransaction(std::string paymentCode) 
 {
-    Bip47Account toBip47Account(0, paymentCode);
+    Bip47Account toBip47Account(paymentCode);
+
     CAmount ntValue = CENT;
     CBitcoinAddress ntAddress = toBip47Account.getNotificationAddress();
     LogPrintf("Bip47Wallet getNotificationAddress: %s\n", ntAddress.ToString().c_str());
@@ -286,29 +293,35 @@ void Bip47Wallet::makeNotificationTransaction(String paymentCode)
 
 
     CScript scriptPubKey = GetScriptForDestination(ntAddress.Get());
-        // Create and send the transaction
+    // Create and send the transaction
     CReserveKey reservekey(pwalletMain);
     LogPrintf("Bip47Wallet get reservekey\n");
     CAmount nFeeRequired;
     std::string strError;
     vector<CRecipient> vecSend;
     int nChangePosRet = -1;
-    CRecipient recipient = {scriptPubKey, ntValue, true};
+    CRecipient recipient = {scriptPubKey, ntValue, false};
     vecSend.push_back(recipient);
     try
     {
+        LogPrintf("Make general transaction template to notification address\n");
         if(!pwalletMain->CreateTransaction(vecSend, wtx, reservekey, nFeeRequired, nChangePosRet, strError)) {
-            LogPrintf("Bip47Wallet Error CreateTransaction 1\n");
-            return;
+            LogPrintf("Bip47Wallet Error CreateTransaction 1 %s\n", strError);
+            throw std::runtime_error(std::string("Bip47Wallet Error CreateTransaction 1 ") + strError );
         }
 
         if ( wtx.vin.size() == 0 ) {
             LogPrintf("Bip47Wallet Error CreateTransaction wtx.vin.size = 0\n");
-            return;
+            throw std::runtime_error("Bip47Wallet Error CreateTransaction wtx.vin.size = 0\n");
         }
 
         CPubKey designatedPubKey;
-        reservekey.GetReservedKey(designatedPubKey);
+        if(!reservekey.GetReservedKey(designatedPubKey))
+        {
+            LogPrintf("Bip47Wallet Error while get designated Pubkey from reserved key\n");
+            throw std::runtime_error("Bip47Wallet Error while get designated Pubkey from reserved key\n");
+        }
+
         CKey privKey;
         pwalletMain->GetKey(designatedPubKey.GetID(), privKey);
         
@@ -319,31 +332,40 @@ void Bip47Wallet::makeNotificationTransaction(String paymentCode)
         Bip47_common::arraycopy(privKey.begin(), 0, dataPriv, 0, privKey.size());
         Bip47_common::arraycopy(pubkey.begin(), 0, dataPub, 0, pubkey.size());
         
+        LogPrintf("Generate Secret Point\n");
         SecretPoint secretPoint(dataPriv, dataPub);
-
-
+       
         vector<unsigned char> outpoint = ParseHex(wtx.vin[0].prevout.ToString());
+
+        LogPrintf("Get Mask from payment code\n");
         vector<unsigned char> mask = PaymentCode::getMask(secretPoint.ECDHSecretAsBytes(), outpoint);
 
+        LogPrintf("Get op_return bytes via blind\n");
         vector<unsigned char> op_return = PaymentCode::blind(mBip47Accounts[0].getPaymentCode().getPayload(), mask);
 
         CScript op_returnScriptPubKey = CScript() << OP_RETURN << op_return;
-        CTxOut txOut(0, op_returnScriptPubKey);
-        wtx.vout.push_back(txOut);
-        // vecSend.push_back(recipient);
+        CRecipient pcodeBlind = {op_returnScriptPubKey, 0, false};
+        // CTxOut txOut(0, op_returnScriptPubKey);
+        LogPrintf("Add Blind Code to vecSend\n");
+        // wtx.vout.push_back(txOut);
+        vecSend.push_back(pcodeBlind);
 
         if(!pwalletMain->CreateTransaction(vecSend, wtx, reservekey, nFeeRequired, nChangePosRet, strError)) {
             LogPrintf("Bip47Wallet Error CreateTransaction 2\n");
-            return;
+            throw std::runtime_error(std::string("Bip47Wallet:error ").append(strError));
         }
 
         if(!pwalletMain->CommitTransaction(wtx, reservekey)) {
             LogPrintf("Bip47Wallet Error CommitTransaction\n");
+            throw std::runtime_error(std::string("Bip47Wallet:error ").append(strError));
         }
+        return wtx.GetHash().GetHex();
+        
     }
     catch(const std::exception& e)
     {
         LogPrintf("Bip47Wallet:error %s\n", e.what());
+        throw std::runtime_error(std::string("Bip47Wallet:error ").append(e.what()));
     }
     
     
@@ -367,7 +389,7 @@ void Bip47Wallet::deriveAccount(vector<unsigned char> hd_seed)
     masterKey.Derive(purposeKey, BIP47_INDEX | BIP32_HARDENED_KEY_LIMIT);
     purposeKey.Derive(coinTypeKey, 0 | BIP32_HARDENED_KEY_LIMIT);
     // coinTypeKey.Derive(identityKey, 0 | BIP32_HARDENED_KEY_LIMIT);
-    Bip47Account bip47Account(0, coinTypeKey, 0);
+    Bip47Account bip47Account(coinTypeKey, 0);
 
     mBip47Accounts.clear();
     mBip47Accounts.push_back(bip47Account);
@@ -377,6 +399,11 @@ string Bip47Wallet::getPaymentCode()
 {
     return getAccount(0).getStringPaymentCode();
 }
+std::string  Bip47Wallet::getNotifiactionAddress()
+{
+    return getAccount(0).getNotificationAddress().ToString();
+}
+
 
 void Bip47Wallet::deriveAccount(CExtKey masterKey) 
 {
@@ -389,7 +416,8 @@ void Bip47Wallet::deriveAccount(CExtKey masterKey)
     masterKey.Derive(purposeKey, BIP47_INDEX | BIP32_HARDENED_KEY_LIMIT);
     purposeKey.Derive(coinTypeKey, 0 | BIP32_HARDENED_KEY_LIMIT);
     // coinTypeKey.Derive(identityKey, 0 | BIP32_HARDENED_KEY_LIMIT);
-    Bip47Account bip47Account(0, coinTypeKey, 0);
+    Bip47Account bip47Account(coinTypeKey, 0);
+
 
     mBip47Accounts.clear();
     mBip47Accounts.push_back(bip47Account);

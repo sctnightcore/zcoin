@@ -1,4 +1,3 @@
-
 #ifndef BIP47UTIL_H
 #define BIP47UTIL_H
 #include "bip47_common.h"
