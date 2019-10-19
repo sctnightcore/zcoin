@@ -58,54 +58,7 @@ bool Bip47Wallet::initLoadBip47Wallet()
 
 
 
-CBitcoinAddress Bip47Wallet::getAddressOfReceived(CTransaction tx) 
-{
-    isminefilter filter = ISMINE_ALL;
-    for (int i = 0; i < tx.vout.size(); i++) {
-        try
-        {
-            if(tx.vout[i].scriptPubKey.IsPayToPublicKeyHash()) {
-                CTxDestination address;
-                if(ExtractDestination(tx.vout[i].scriptPubKey, address)) {
-                    isminefilter mine = ::IsMine(*this, address);
-                    if(mine & ISMINE_ALL) {
-                        return CBitcoinAddress(address);
-                    }
-                }
-            }
-        }
-        catch(const std::exception& e)
-        {
-            std::cerr << e.what() << '\n';
-        }
-        
-    }
-    return CBitcoinAddress();
-}
 
-CBitcoinAddress Bip47Wallet::getAddressOfSent(CTransaction tx) {
-    isminefilter filter = ISMINE_ALL;
-    for (int i = 0; i < tx.vout.size(); i++) {
-        try
-        {
-            if(tx.vout[i].scriptPubKey.IsPayToPublicKeyHash()) {
-                CTxDestination address;
-                if(ExtractDestination(tx.vout[i].scriptPubKey, address)) {
-                    isminefilter mine = ::IsMine(*this, address);
-                    if(!(mine & ISMINE_ALL)) {
-                        return CBitcoinAddress(address);
-                    }
-                }
-            }
-        }
-        catch(const std::exception& e)
-        {
-            std::cerr << e.what() << '\n';
-        }
-        
-    }
-    return CBitcoinAddress();
-}
 
 
 PaymentCode Bip47Wallet::getPaymentCodeInNotificationTransaction(CTransaction tx) 
@@ -281,7 +234,6 @@ CAmount Bip47Wallet::getValueSentToMe(CTransaction tx)
 std::string Bip47Wallet::makeNotificationTransaction(std::string paymentCode) 
 {
     Bip47Account toBip47Account(paymentCode);
-
     CAmount ntValue = CENT;
     CBitcoinAddress ntAddress = toBip47Account.getNotificationAddress();
     LogPrintf("Bip47Wallet getNotificationAddress: %s\n", ntAddress.ToString().c_str());
@@ -321,7 +273,6 @@ std::string Bip47Wallet::makeNotificationTransaction(std::string paymentCode)
             LogPrintf("Bip47Wallet Error while get designated Pubkey from reserved key\n");
             throw std::runtime_error("Bip47Wallet Error while get designated Pubkey from reserved key\n");
         }
-
         CKey privKey;
         pwalletMain->GetKey(designatedPubKey.GetID(), privKey);
         
@@ -374,7 +325,75 @@ std::string Bip47Wallet::makeNotificationTransaction(std::string paymentCode)
 CTransaction* Bip47Wallet::getSignedNotificationTransaction(CWalletTx &sendRequest, string paymentCode) {
     CommitTransaction(sendRequest);
     return (CTransaction*)&sendRequest;
+}
+
+bool Bip47Wallet::isNotificationTransaction(CTransaction tx)
+{
+    if (!tx.IsPaymentCode())
+    {
+        return false;
+    }
+    CBitcoinAddress addr = getAddressOfReceived(tx);
+    if (getNotifiactionAddress().compare(addr.ToString()) == 0)
+    {
+        return true;
+    }
     
+}
+
+bool Bip47Wallet::isToBIP47Address(CTransaction tx)
+{
+    
+    return true;
+}
+
+CBitcoinAddress Bip47Wallet::getAddressOfReceived(CTransaction tx) 
+{
+    isminefilter filter = ISMINE_ALL;
+    for (int i = 0; i < tx.vout.size(); i++) {
+        try
+        {
+            if(tx.vout[i].scriptPubKey.IsPayToPublicKeyHash()) {
+                CTxDestination address;
+                if(ExtractDestination(tx.vout[i].scriptPubKey, address)) {
+                    isminefilter mine = ::IsMine(*this, address);
+                    if(mine & ISMINE_ALL) {
+                        return CBitcoinAddress(address);
+                    }
+                }
+            }
+        }
+        catch(const std::exception& e)
+        {
+            std::cerr << e.what() << '\n';
+        }
+        
+    }
+    return CBitcoinAddress();
+}
+
+CBitcoinAddress Bip47Wallet::getAddressOfSent(CTransaction tx) {
+    isminefilter filter = ISMINE_ALL;
+    for (int i = 0; i < tx.vout.size(); i++) {
+        try
+        {
+            if(tx.vout[i].scriptPubKey.IsPayToPublicKeyHash()) {
+                CTxDestination address;
+                if(ExtractDestination(tx.vout[i].scriptPubKey, address)) {
+                    isminefilter mine = ::IsMine(*this, address);
+                    if(!(mine & ISMINE_ALL)) {
+                        return CBitcoinAddress(address);
+                    }
+                }
+            }
+        }
+        catch(const std::exception& e)
+        {
+            std::cerr << e.what() << '\n';
+        }
+        
+    }
+    return CBitcoinAddress();
 }
 
 void Bip47Wallet::deriveAccount(vector<unsigned char> hd_seed) 
@@ -404,7 +423,6 @@ std::string  Bip47Wallet::getNotifiactionAddress()
     return getAccount(0).getNotificationAddress().ToString();
 }
 
-
 void Bip47Wallet::deriveAccount(CExtKey masterKey) 
 {
     // CExtKey masterKey;             //bip47 master key
@@ -417,7 +435,6 @@ void Bip47Wallet::deriveAccount(CExtKey masterKey)
     purposeKey.Derive(coinTypeKey, 0 | BIP32_HARDENED_KEY_LIMIT);
     // coinTypeKey.Derive(identityKey, 0 | BIP32_HARDENED_KEY_LIMIT);
     Bip47Account bip47Account(coinTypeKey, 0);
-
 
     mBip47Accounts.clear();
     mBip47Accounts.push_back(bip47Account);

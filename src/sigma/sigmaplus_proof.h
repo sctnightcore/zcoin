@@ -9,12 +9,12 @@ namespace sigma {
 template<class Exponent, class GroupElement>
 class SigmaPlusProof {
 public:
-    SigmaPlusProof(int n, int m): n(n), m(m) {};
+    SigmaPlusProof(const Params* p): params(p) {};
 
     inline int memoryRequired() const {
         return B_.memoryRequired()
-               + r1Proof_.memoryRequired(n, m)
-               + B_.memoryRequired() * m
+               + r1Proof_.memoryRequired(params->get_n(), params->get_m())
+               + B_.memoryRequired() * params->get_m()
                + z_.memoryRequired();
     }
 
@@ -28,9 +28,9 @@ public:
 
     inline unsigned char* deserialize(unsigned char* buffer) {
         unsigned char* current = B_.deserialize(buffer);
-        current = r1Proof_.deserialize(current, n, m);
-        Gk_.resize(m);
-        for(int i = 0; i < m; ++i)
+        current = r1Proof_.deserialize(current, params->get_n(), params->get_m());
+        Gk_.resize(params->get_m());
+        for(int i = 0; i < params->get_m(); ++i)
             current = Gk_[i].deserialize(current);
         return z_.deserialize(current);
     }
@@ -45,8 +45,7 @@ public:
     }
 
 public:
-    int n;
-    int m;
+    const Params* params;
     GroupElement B_;
     R1Proof<Exponent, GroupElement> r1Proof_;
     std::vector<GroupElement> Gk_;

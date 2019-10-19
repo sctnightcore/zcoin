@@ -450,9 +450,8 @@ BOOST_AUTO_TEST_CASE(create_spend_with_insufficient_coins)
         .fSubtractFeeFromAmount = false
     });
 
-    bool fChangeAddedToFee;
     BOOST_CHECK_EXCEPTION(
-        pwalletMain->CreateSigmaSpendTransaction(recipients, fee, selected, changes, fChangeAddedToFee),
+        pwalletMain->CreateSigmaSpendTransaction(recipients, fee, selected, changes),
         InsufficientFunds,
         [](const InsufficientFunds& e) { return e.what() == std::string("Insufficient funds"); });
     sigmaState->Reset();
@@ -485,9 +484,8 @@ BOOST_AUTO_TEST_CASE(create_spend_with_confirmation_less_than_6)
         .fSubtractFeeFromAmount = false
     });
 
-    bool fChangeAddedToFee;
     BOOST_CHECK_EXCEPTION(
-        pwalletMain->CreateSigmaSpendTransaction(recipients, fee, selected, changes, fChangeAddedToFee),
+        pwalletMain->CreateSigmaSpendTransaction(recipients, fee, selected, changes),
         InsufficientFunds,
         [](const InsufficientFunds& e) { return e.what() == std::string("Insufficient funds"); });
     sigmaState->Reset();
@@ -509,9 +507,8 @@ BOOST_AUTO_TEST_CASE(create_spend_with_coins_less_than_2)
         .fSubtractFeeFromAmount = false
     });
 
-    bool fChangeAddedToFee;
     BOOST_CHECK_EXCEPTION(
-        pwalletMain->CreateSigmaSpendTransaction(recipients, fee, selected, changes, fChangeAddedToFee),
+        pwalletMain->CreateSigmaSpendTransaction(recipients, fee, selected, changes),
         std::runtime_error,
         [](const std::runtime_error& e) {return e.what() == std::string("Insufficient funds");});
     sigmaState->Reset();
@@ -539,8 +536,7 @@ BOOST_AUTO_TEST_CASE(create_spend_with_coins_more_than_1)
         .fSubtractFeeFromAmount = false
     });
 
-    bool fChangeAddedToFee;
-    CWalletTx tx = pwalletMain->CreateSigmaSpendTransaction(recipients, fee, selected, changes, fChangeAddedToFee);
+    CWalletTx tx = pwalletMain->CreateSigmaSpendTransaction(recipients, fee, selected, changes);
 
     BOOST_CHECK(tx.vin.size() == 2);
 

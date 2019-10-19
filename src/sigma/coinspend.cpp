@@ -16,7 +16,7 @@ CoinSpend::CoinSpend(
     coinSerialNumber(coin.getSerialNumber()),
     ecdsaSignature(64, 0),
     ecdsaPubkey(33, 0),
-    sigmaProof(p->get_n(), p->get_m())
+    sigmaProof(p)
 {
     if (!HasValidSerial()) {
         throw ZerocoinException("Invalid serial # range");
